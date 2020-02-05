@@ -7,7 +7,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"fmt"
 )
 
 // CreateFlags for creating a New stream.
@@ -154,7 +153,6 @@ func (r *eventStreamRegistry) Delete(i uintptr) {
 
 // Start listening to an event stream.
 func (es *EventStream) Start() {
-	fmt.Println("start in fsevents")
 	if es.Events == nil {
 		es.Events = make(chan []Event)
 	}
@@ -175,7 +173,6 @@ func (es *EventStream) Flush(sync bool) {
 
 // Stop listening to the event stream.
 func (es *EventStream) Stop() {
-	fmt.Println("fsevents.go : stop")
 	if es.stream != nil {
 		stop(es.stream, es.rlref)
 		es.stream = nil
@@ -188,7 +185,6 @@ func (es *EventStream) Stop() {
 
 // Restart listening.
 func (es *EventStream) Restart() {
-	fmt.Println("fsevents.go : restart")
 	es.Stop()
 	es.Resume = true
 	es.Start()
