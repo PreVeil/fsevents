@@ -32,6 +32,7 @@ import (
 	"runtime"
 	"time"
 	"unsafe"
+	"os"
 )
 
 // LatestEventID returns the most recently generated event ID, system-wide.
@@ -46,7 +47,6 @@ func LatestEventID() uint64 {
 func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, cpaths **C.char, cflags *C.FSEventStreamEventFlags, cids *C.FSEventStreamEventId) {
 	l := int(numEvents)
 	events := make([]Event, l)
-
 	es := registry.Get(info)
 	if es == nil {
 		log.Printf("failed to retrieve registry %d", info)
@@ -59,13 +59,22 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 	flags := (*[1 << 30]C.FSEventStreamEventFlags)(unsafe.Pointer(cflags))[:l:l]
 	for i := range events {
 		events[i] = Event{
-			Path:  C.GoString(paths[i]),
+			Path:  "/"+C.GoString(paths[i]),
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
+		if events[i].Flags&ItemRenamed == ItemRenamed{
+			cacheRenameEvent := events[i]
+			events[i].Flags = events[i].Flags^ItemRenamed
+			cacheRenameEvent.Flags = ItemRenamed
+			if _, err := os.Lstat(cacheRenameEvent.Path); err!= nil{
+				go es.RenameCache.Add(cacheRenameEvent, "RENAME_FROM")
+			} else{
+				go es.RenameCache.Add(cacheRenameEvent, "RENAME_TO")
+			}
+		}
 		es.EventID = uint64(ids[i])
 	}
-
 	es.Events <- events
 }
 
@@ -212,7 +221,6 @@ func setupStream(paths []string, flags CreateFlags, callbackInfo uintptr, eventI
 }
 
 func (es *EventStream) start(paths []string, callbackInfo uintptr) {
-
 	since := eventIDSinceNow
 	if es.Resume {
 		since = es.EventID
@@ -259,9 +267,42 @@ func flush(stream FSEventStreamRef, sync bool) {
 
 // stop requests fsevents stops streaming events
 func stop(stream FSEventStreamRef, rlref CFRunLoopRef) {
+
 	C.FSEventStreamStop(stream)
 	C.FSEventStreamInvalidate(stream)
 	C.FSEventStreamRelease(stream)
 	C.CFRunLoopStop(C.CFRunLoopRef(rlref))
 	C.CFRelease(C.CFTypeRef(rlref))
+}
+
+var noteDescription = map[EventFlags]string{
+	MustScanSubDirs: "MustScanSubdirs",
+	UserDropped:     "UserDropped",
+	KernelDropped:   "KernelDropped",
+	EventIDsWrapped: "EventIDsWrapped",
+	HistoryDone:     "HistoryDone",
+	RootChanged:     "RootChanged",
+	Mount:           "Mount",
+	Unmount:         "Unmount",
+
+	ItemCreated:       "Created",
+	ItemRemoved:       "Removed",
+	ItemInodeMetaMod:  "InodeMetaMod",
+	ItemRenamed:       "Renamed",
+	ItemModified:      "Modified",
+	ItemFinderInfoMod: "FinderInfoMod",
+	ItemChangeOwner:   "ChangeOwner",
+	ItemXattrMod:      "XAttrMod",
+	ItemIsFile:        "IsFile",
+	ItemIsDir:         "IsDir",
+	ItemIsSymlink:     "IsSymLink",
+}
+func logEvent(event Event) {
+	note := ""
+	for bit, description := range noteDescription {
+		if event.Flags&bit == bit {
+			note += description + " "
+		}
+	}
+	log.Printf("EventID: %d Path: %s Flags: %s", event.ID, event.Path, note)
 }

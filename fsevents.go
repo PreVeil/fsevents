@@ -7,6 +7,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"fmt"
 )
 
 // CreateFlags for creating a New stream.
@@ -78,6 +79,7 @@ type Event struct {
 	Path  string
 	Flags EventFlags
 	ID    uint64
+	OldPath string
 }
 
 // DeviceForPath returns the device ID for the specified volume.
@@ -112,6 +114,8 @@ type EventStream struct {
 	Latency time.Duration
 	// syscall represents this with an int32
 	Device int32
+	// this cache holds events to detect rename
+	RenameCache Cache
 }
 
 // eventStreamRegistry is a lookup table for EventStream references passed to
@@ -150,6 +154,7 @@ func (r *eventStreamRegistry) Delete(i uintptr) {
 
 // Start listening to an event stream.
 func (es *EventStream) Start() {
+	fmt.Println("start in fsevents")
 	if es.Events == nil {
 		es.Events = make(chan []Event)
 	}
@@ -160,6 +165,7 @@ func (es *EventStream) Start() {
 	es.registryID = cbInfo
 	es.uuid = GetDeviceUUID(es.Device)
 	es.start(es.Paths, cbInfo)
+	es.RenameCache.Start(es)
 }
 
 // Flush events that have occurred but haven't been delivered.
@@ -169,6 +175,7 @@ func (es *EventStream) Flush(sync bool) {
 
 // Stop listening to the event stream.
 func (es *EventStream) Stop() {
+	fmt.Println("fsevents.go : stop")
 	if es.stream != nil {
 		stop(es.stream, es.rlref)
 		es.stream = nil
@@ -181,6 +188,7 @@ func (es *EventStream) Stop() {
 
 // Restart listening.
 func (es *EventStream) Restart() {
+	fmt.Println("fsevents.go : restart")
 	es.Stop()
 	es.Resume = true
 	es.Start()
