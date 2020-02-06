@@ -304,5 +304,5 @@ func logEvent(event Event) {
 			note += description + " "
 		}
 	}
-	log.Printf("EventID: %d Path: %s Flags: %s", event.ID, event.Path, note)
+	log.Printf("EventID: %d Path: %s OldPath: %s Flags: %s", event.ID, event.Path, event.OldPath, note)
 }
