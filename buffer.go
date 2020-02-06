@@ -66,8 +66,8 @@ func (c *Cache) createRenameEvent(oldNameEvent, newNameEvent Event, oldNameExist
 	c.BroadcastRenameEvent(newNameEvent)
 }
 func (c *Cache) CheckForMatch(eventId uint64)(event Event, matchedEvent Event, eventExist, matchExist bool,  mode string){
-	c.Lock()	
-	defer c.Unlock()
+//c.Lock()	
+//defer c.Unlock()
 	if event, eventExist = c.RenameFrom[eventId]; eventExist{
 		delete(c.RenameFrom, event.ID)
 		matchedEvent, matchExist = c.RenameTo[event.ID+1]; 
@@ -92,24 +92,18 @@ func (c *Cache) removeHead(){
 	event, matchedEvent, eventExist, matchExist, mode := c.CheckForMatch(c.timers.Head().ID)
 	if mode == "RENAME_TO"{
 		c.createRenameEvent(matchedEvent, event, matchExist, eventExist)
-		c.Lock()
 		c.timers.moveHead()
-		c.Unlock()
 	}else if mode == "RENAME_FROM"{
 		c.createRenameEvent(event, matchedEvent, eventExist, matchExist)
-		c.Lock()
 		c.timers.moveHead()
-		c.Unlock()
 	}
 }
 func (c *Cache) addToTimer(eventId uint64){
 	for c.timers.Full >= c.timers.Size{
 		c.removeHead()
 	}
-	c.Lock()
 	c.timers.Add(time.Now(), eventId)
 	c.timers.Next()
-	c.Unlock()
 }
 func (c *Cache) timeDifference(t time.Time)int{
 	currentTime := time.Now()
@@ -131,25 +125,17 @@ func (c *Cache) Add(e Event, mode string){
 	if mode == "RENAME_TO"{
 		if renameFromEvent, exist := c.RenameFrom[eventId-1]; exist {
 			c.createRenameEvent(renameFromEvent, e, exist, true)
-			c.Lock()
 			delete(c.RenameFrom, renameFromEvent.ID)
-			c.Unlock()
 		}else{
-			c.Lock()
 			c.RenameTo[e.ID] = e
-			c.Unlock()
 			c.addToTimer(e.ID)
 		}
 	}else{
 		if renameToEvent, exist := c.RenameTo[eventId+1]; exist {
 			c.createRenameEvent(e, renameToEvent, true, exist)
-			c.Lock()
 			delete(c.RenameTo, renameToEvent.ID)
-			c.Unlock()
 		}else{
-			c.Lock()
 			c.RenameFrom[e.ID] = e
-			c.Unlock()
 			c.addToTimer(e.ID)
 		}
 	}
@@ -192,8 +178,8 @@ func (c *Cache) findExpiredEvents(){
 //is mutex needed?
 //TODO : make it bettert
 func (c *Cache) BroadcastRenameEvent(e Event){
-	c.Lock()
-	defer c.Unlock()
+//	c.Lock()
+//	defer c.Unlock()
 	events := make([]Event, 1)
 	events[0] = e
 	c.Events <- events

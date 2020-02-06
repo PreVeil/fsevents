@@ -68,9 +68,9 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			events[i].Flags = events[i].Flags^ItemRenamed
 			cacheRenameEvent.Flags = ItemRenamed
 			if _, err := os.Lstat(cacheRenameEvent.Path); err!= nil{
-				go es.RenameCache.Add(cacheRenameEvent, "RENAME_FROM")
+				es.RenameCache.Add(cacheRenameEvent, "RENAME_FROM")
 			} else{
-				go es.RenameCache.Add(cacheRenameEvent, "RENAME_TO")
+				es.RenameCache.Add(cacheRenameEvent, "RENAME_TO")
 			}
 		}
 		es.EventID = uint64(ids[i])
