@@ -1,16 +1,10 @@
 package fsevents
 
 import(
-	//"fmt"
-	//"os"
 	"sync"
 	"time"
 )
 
-// 3 main funcrtion:
-// waits for rename events
-// preocess the new rename events and check if a match exist in the other cache
-// removes the timed out events
 const(
 	MaxCapacity = 2000
 )
@@ -53,8 +47,6 @@ func (tc *TimerCache)Head()TimerCacheItem{
 }
 func (c *Cache) createRenameEvent(oldNameEvent, newNameEvent Event, oldNameExist, newNameExist bool){
 	if !newNameExist && oldNameExist{
-		//oldNameEvent.OldPath = oldNameEvent.Path
-		//oldNameEvent.Path = ""
 		oldNameEvent.Flags = ItemRemoved
 		c.BroadcastRenameEvent(oldNameEvent)
 		return 
@@ -66,8 +58,6 @@ func (c *Cache) createRenameEvent(oldNameEvent, newNameEvent Event, oldNameExist
 	c.BroadcastRenameEvent(newNameEvent)
 }
 func (c *Cache) CheckForMatch(eventId uint64)(event Event, matchedEvent Event, eventExist, matchExist bool,  mode string){
-//c.Lock()	
-//defer c.Unlock()
 	if event, eventExist = c.RenameFrom[eventId]; eventExist{
 		delete(c.RenameFrom, event.ID)
 		matchedEvent, matchExist = c.RenameTo[event.ID+1]; 
@@ -88,7 +78,6 @@ func (c *Cache) CheckForMatch(eventId uint64)(event Event, matchedEvent Event, e
 	return 
 }
 func (c *Cache) removeHead(){
-		
 	event, matchedEvent, eventExist, matchExist, mode := c.CheckForMatch(c.timers.Head().ID)
 	if mode == "RENAME_TO"{
 		c.createRenameEvent(matchedEvent, event, matchExist, eventExist)
@@ -174,12 +163,8 @@ func (c *Cache) findExpiredEvents(){
 		}
 	}
 }
-//broadcast the event to the event stream! 
-//is mutex needed?
-//TODO : make it bettert
+
 func (c *Cache) BroadcastRenameEvent(e Event){
-//	c.Lock()
-//	defer c.Unlock()
 	events := make([]Event, 1)
 	events[0] = e
 	c.Events <- events
@@ -205,13 +190,3 @@ func (c *Cache) Start(es *EventStream){
 		}
 	}()
 }
-
-
-
-
-//delete an item from chache 
-//MAke a buffer in the event stream for rename cases
-//add oldname to the event for rename case
-//if the event does not have lstat add to rename from cache
-//fuction for checking if two events match for renaming
-

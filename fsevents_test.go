@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"os/exec"
 	"strconv"
-	//"fmt"
 )
 type counter struct {
 	val int32
@@ -295,7 +294,6 @@ func TestFseventMultipleRenames(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	
 	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(1000 * time.Millisecond)
 	if renameReceived.value() == 0 {
@@ -320,11 +318,6 @@ func TestFseventMultipleRenames(t *testing.T) {
 	}
 
 }
-
-
-
-
-
 
 func testRename(file1, file2 string) error {
 	switch runtime.GOOS {

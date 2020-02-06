@@ -267,7 +267,6 @@ func flush(stream FSEventStreamRef, sync bool) {
 
 // stop requests fsevents stops streaming events
 func stop(stream FSEventStreamRef, rlref CFRunLoopRef) {
-
 	C.FSEventStreamStop(stream)
 	C.FSEventStreamInvalidate(stream)
 	C.FSEventStreamRelease(stream)
