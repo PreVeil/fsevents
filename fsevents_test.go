@@ -5,14 +5,15 @@ package fsevents
 import (
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
-	"sync/atomic"
-	"runtime"
-	"os/exec"
-	"strconv"
 )
+
 type counter struct {
 	val int32
 }
@@ -28,7 +29,6 @@ func (c *counter) value() int32 {
 func (c *counter) reset() {
 	atomic.StoreInt32(&c.val, 0)
 }
-
 
 func TestBasicExample(t *testing.T) {
 	path, err := ioutil.TempDir("", "fsexample")
@@ -70,6 +70,7 @@ func TestBasicExample(t *testing.T) {
 
 	<-wait
 }
+
 // creates a file, modifies it, rename it, delete it! the first 3 events should be
 func TestFseventRename(t *testing.T) {
 	path, err := ioutil.TempDir("", "fsexample")
@@ -92,7 +93,7 @@ func TestFseventRename(t *testing.T) {
 
 	es.Start()
 	defer es.Stop()
-	
+
 	var renameReceived counter
 	done := make(chan bool)
 	wait := make(chan bool)
@@ -101,13 +102,13 @@ func TestFseventRename(t *testing.T) {
 
 	go func() {
 		for {
-			select{
-			case _ = <- wait:
+			select {
+			case _ = <-wait:
 				done <- true
 				return
-			case msg := <- es.Events:
+			case msg := <-es.Events:
 				for _, event := range msg {
-					if event.Flags&ItemRenamed==ItemRenamed{
+					if event.Flags&ItemRenamed == ItemRenamed {
 						renameReceived.increment()
 					}
 					t.Logf("Event: %#v", event)
@@ -128,12 +129,10 @@ func TestFseventRename(t *testing.T) {
 	if err := testRename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
-	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(700 * time.Millisecond)
 	if renameReceived.value() == 0 {
 		t.Fatal("fsnotify rename events have not been received after 500 ms")
 	}
-	// Try closing the fsnotify instance
 	wait <- true
 	t.Log("waiting for the event channel to become closed...")
 	select {
@@ -166,7 +165,7 @@ func TestFseventRenameEventAttributes(t *testing.T) {
 
 	es.Start()
 	defer es.Stop()
-	
+
 	var renameReceived counter
 	done := make(chan bool)
 	wait := make(chan bool)
@@ -175,13 +174,13 @@ func TestFseventRenameEventAttributes(t *testing.T) {
 
 	go func() {
 		for {
-			select{
-			case _ = <- wait:
+			select {
+			case _ = <-wait:
 				done <- true
 				return
-			case msg := <- es.Events:
+			case msg := <-es.Events:
 				for _, event := range msg {
-					if event.Flags&ItemRenamed==ItemRenamed{
+					if event.Flags&ItemRenamed == ItemRenamed {
 						if event.Path == filepath.Clean(testFile) {
 							if event.OldPath != filepath.Clean(testFileRenamed) {
 								t.Logf("unexpected old name for a file in rename event: %#v", event)
@@ -203,12 +202,10 @@ func TestFseventRenameEventAttributes(t *testing.T) {
 	if err := testRename(testFile, testFileRenamed); err != nil {
 		t.Fatalf("rename failed: %s", err)
 	}
-	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(700 * time.Millisecond)
 	if renameReceived.value() == 0 {
 		t.Fatal("fsnotify rename events have not been received after 500 ms")
 	}
-	// Try closing the fsnotify instance
 	wait <- true
 	t.Log("waiting for the event channel to become closed...")
 	select {
@@ -241,28 +238,26 @@ func TestFseventMultipleRenames(t *testing.T) {
 
 	es.Start()
 	defer es.Stop()
-	
+
 	var renameReceived counter
 	done := make(chan bool)
 	wait := make(chan bool)
-	// testFile := filepath.Join(path, "TestFseventEvents.testfile")
-	// testFileRenamed := filepath.Join(path, "TestFseventEvents.testfileRenamed")
 
 	newName := ""
 	oldName := ""
 
 	go func() {
 		for {
-			select{
-			case _ = <- wait:
+			select {
+			case _ = <-wait:
 				done <- true
 				return
-			case msg := <- es.Events:
+			case msg := <-es.Events:
 				for _, event := range msg {
-					if event.Flags&ItemRenamed==ItemRenamed{
+					if event.Flags&ItemRenamed == ItemRenamed {
 						newName, _ = filepath.Rel(path, event.Path)
 						oldName, _ = filepath.Rel(path, event.OldPath)
-						if newName != oldName+"Renamed"{
+						if newName != oldName+"Renamed" {
 							t.Errorf("rename order messed up: %#v", event)
 						}
 						renameReceived.increment()
@@ -273,9 +268,9 @@ func TestFseventMultipleRenames(t *testing.T) {
 		}
 	}()
 
-	numberOfFiles :=1000
+	numberOfFiles := 1000
 	testFileNameCommon := "TestFseventEvents.testfile"
-	renameAction := func(t *testing.T, count string){
+	renameAction := func(t *testing.T, count string) {
 		testFile := filepath.Join(path, testFileNameCommon+count)
 		f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
@@ -284,7 +279,7 @@ func TestFseventMultipleRenames(t *testing.T) {
 		f.Close()
 
 		testFileRenamed := filepath.Join(path, testFileNameCommon+count+"Renamed")
-		if err := testRename(testFile, testFileRenamed); err != nil{
+		if err := testRename(testFile, testFileRenamed); err != nil {
 			t.Fatalf("rename action failed (SYSCALL): %s", err)
 		}
 	}
@@ -294,7 +289,6 @@ func TestFseventMultipleRenames(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	// We expect this event to be received almost immediately, but let's wait 500 ms to be sure
 	time.Sleep(1000 * time.Millisecond)
 	if renameReceived.value() == 0 {
 		t.Fatal("fsnotify rename events have not been received after 500 ms")

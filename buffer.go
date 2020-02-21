@@ -183,7 +183,7 @@ func (c *Cache) Start(es *EventStream) {
 	c.RenameTo = make(map[uint64]Event)
 
 	c.timers = TimerCache{make([]TimerCacheItem, MaxCapacity), 0, MaxCapacity, 0, 0}
-	c.Events = es.Events
+	c.ProcessedEvents = es.Events
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	c.done = make(chan bool)

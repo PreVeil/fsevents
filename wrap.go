@@ -27,12 +27,12 @@ import "C"
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"time"
 	"unsafe"
-	"os"
 )
 
 // LatestEventID returns the most recently generated event ID, system-wide.
@@ -59,17 +59,17 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 	flags := (*[1 << 30]C.FSEventStreamEventFlags)(unsafe.Pointer(cflags))[:l:l]
 	for i := range events {
 		events[i] = Event{
-			Path:  "/"+C.GoString(paths[i]),
+			Path:  "/" + C.GoString(paths[i]),
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
-		if events[i].Flags&ItemRenamed == ItemRenamed{
+		if events[i].Flags&ItemRenamed == ItemRenamed {
 			cacheRenameEvent := events[i]
-			events[i].Flags = events[i].Flags^ItemRenamed
+			events[i].Flags = events[i].Flags ^ ItemRenamed
 			cacheRenameEvent.Flags = ItemRenamed
-			if _, err := os.Lstat(cacheRenameEvent.Path); err!= nil{
+			if _, err := os.Lstat(cacheRenameEvent.Path); err != nil {
 				es.RenameCache.Add(cacheRenameEvent, "RENAME_FROM")
-			} else{
+			} else {
 				es.RenameCache.Add(cacheRenameEvent, "RENAME_TO")
 			}
 		}
@@ -272,36 +272,4 @@ func stop(stream FSEventStreamRef, rlref CFRunLoopRef) {
 	C.FSEventStreamRelease(stream)
 	C.CFRunLoopStop(C.CFRunLoopRef(rlref))
 	C.CFRelease(C.CFTypeRef(rlref))
-}
-
-var noteDescription = map[EventFlags]string{
-	MustScanSubDirs: "MustScanSubdirs",
-	UserDropped:     "UserDropped",
-	KernelDropped:   "KernelDropped",
-	EventIDsWrapped: "EventIDsWrapped",
-	HistoryDone:     "HistoryDone",
-	RootChanged:     "RootChanged",
-	Mount:           "Mount",
-	Unmount:         "Unmount",
-
-	ItemCreated:       "Created",
-	ItemRemoved:       "Removed",
-	ItemInodeMetaMod:  "InodeMetaMod",
-	ItemRenamed:       "Renamed",
-	ItemModified:      "Modified",
-	ItemFinderInfoMod: "FinderInfoMod",
-	ItemChangeOwner:   "ChangeOwner",
-	ItemXattrMod:      "XAttrMod",
-	ItemIsFile:        "IsFile",
-	ItemIsDir:         "IsDir",
-	ItemIsSymlink:     "IsSymLink",
-}
-func logEvent(event Event) {
-	note := ""
-	for bit, description := range noteDescription {
-		if event.Flags&bit == bit {
-			note += description + " "
-		}
-	}
-	log.Printf("EventID: %d Path: %s OldPath: %s Flags: %s", event.ID, event.Path, event.OldPath, note)
 }

@@ -75,9 +75,9 @@ const (
 
 // Event represents a single file system notification.
 type Event struct {
-	Path  string
-	Flags EventFlags
-	ID    uint64
+	Path    string
+	Flags   EventFlags
+	ID      uint64
 	OldPath string
 }
 
