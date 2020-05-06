@@ -59,10 +59,12 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 	flags := (*[1 << 30]C.FSEventStreamEventFlags)(unsafe.Pointer(cflags))[:l:l]
 	for i := range events {
 		events[i] = Event{
-			Path:  "/" + C.GoString(paths[i]),
+			Path:  C.GoString(paths[i]),
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
+		//IF the event has a renameFlag, exclude the RenameFlag and pass the rest (may include other operations)
+		//Cache the RenameEvent
 		if events[i].Flags&ItemRenamed == ItemRenamed {
 			cacheRenameEvent := events[i]
 			events[i].Flags = events[i].Flags ^ ItemRenamed
@@ -74,7 +76,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
 				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
 			}
-			if _, err := os.Lstat(cacheRenameEvent.Path); err != nil {
+			if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
 				es.RenameCache.Add(cacheRenameEvent, "RENAME_FROM")
 			} else {
 				es.RenameCache.Add(cacheRenameEvent, "RENAME_TO")

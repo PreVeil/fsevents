@@ -9,6 +9,7 @@ Every 100 miliseconds expired items are evicted from cache and if there is no ma
 package fsevents
 
 import (
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,8 @@ type Cache struct {
 	RenameFrom map[uint64]Event
 	RenameTo   map[uint64]Event
 	timers     TimerCache
+
+	cacheLock sync.RWMutex
 
 	ProcessedEvents chan []Event
 	done            chan bool
@@ -66,6 +69,8 @@ func (c *Cache) createRenameEvent(oldNameEvent, newNameEvent Event, oldNameExist
 	c.BroadcastRenameEvent(newNameEvent)
 }
 func (c *Cache) CheckForMatch(eventId uint64) (event Event, matchedEvent Event, eventExist, matchExist bool, mode string) {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 	if event, eventExist = c.RenameFrom[eventId]; eventExist {
 		delete(c.RenameFrom, event.ID)
 		matchedEvent, matchExist = c.RenameTo[event.ID+1]
@@ -110,6 +115,8 @@ func (c *Cache) timeDifference(t time.Time) int {
 }
 func (c *Cache) EventExists(eventId uint64) bool {
 	//TODO maybe return the event
+	c.cacheLock.RLock()
+	defer c.cacheLock.RUnlock()
 	if _, exist := c.RenameFrom[eventId]; exist {
 		return true
 	} else if _, exist := c.RenameTo[eventId]; exist {
@@ -120,20 +127,36 @@ func (c *Cache) EventExists(eventId uint64) bool {
 func (c *Cache) Add(e Event, mode string) {
 	eventId := e.ID
 	if mode == "RENAME_TO" {
-		if renameFromEvent, exist := c.RenameFrom[eventId-1]; exist {
+		c.cacheLock.RLock()
+		renameFromEvent, exist := c.RenameFrom[eventId-1]
+		c.cacheLock.RUnlock()
+
+		if exist {
 			c.createRenameEvent(renameFromEvent, e, exist, true)
+			c.cacheLock.Lock()
 			delete(c.RenameFrom, renameFromEvent.ID)
+			c.cacheLock.Unlock()
 		} else {
+			c.cacheLock.Lock()
 			c.RenameTo[e.ID] = e
 			c.addToTimer(e.ID)
+			c.cacheLock.Unlock()
 		}
 	} else {
-		if renameToEvent, exist := c.RenameTo[eventId+1]; exist {
+		c.cacheLock.RLock()
+		renameToEvent, exist := c.RenameTo[eventId+1]
+		c.cacheLock.RUnlock()
+
+		if exist {
 			c.createRenameEvent(e, renameToEvent, true, exist)
+			c.cacheLock.Lock()
 			delete(c.RenameTo, renameToEvent.ID)
+			c.cacheLock.Unlock()
 		} else {
+			c.cacheLock.Lock()
 			c.RenameFrom[e.ID] = e
 			c.addToTimer(e.ID)
+			c.cacheLock.Unlock()
 		}
 	}
 }
@@ -141,20 +164,34 @@ func (c *Cache) getEvent(eventId uint64, mode string) (reqEvent Event, exist boo
 
 	if mode == "RENAME_TO" {
 		if reqEvent, exist = c.RenameTo[eventId]; exist {
+			c.cacheLock.Lock()
 			delete(c.RenameTo, reqEvent.ID)
+			c.cacheLock.Unlock()
 		}
 		return
 	} else {
 		if reqEvent, exist = c.RenameFrom[eventId]; exist {
+			c.cacheLock.Lock()
 			delete(c.RenameFrom, reqEvent.ID)
+			c.cacheLock.Unlock()
 		}
 		return
 	}
 }
+
+/*
+Check for expired events
+3 types of event are in the cache
+1- the ones that have been matched
+2- the unmatched ones with expired timer
+3- the unmatched ones waiting for its match
+This funtion keep removing the first event in the list untill it reaches the 3rd case
+*/
 func (c *Cache) findExpiredEvents() {
 	itemRemoved := true
 	for c.timers.NumberOfItems > 0 && itemRemoved {
 		if c.timeDifference(c.timers.Head().T)*1000 > int(1*time.Millisecond) {
+			//The item is expired
 			if c.EventExists(c.timers.Head().ID) {
 				event, matchedEvent, eventExist, matchExist, eventType := c.CheckForMatch(c.timers.Head().ID)
 				if eventType == "RENAME_TO" {
@@ -163,16 +200,22 @@ func (c *Cache) findExpiredEvents() {
 					c.createRenameEvent(event, matchedEvent, eventExist, matchExist)
 				}
 			}
+			c.cacheLock.Lock()
 			c.timers.moveHead()
+			c.cacheLock.Unlock()
 		} else if !c.EventExists(c.timers.Head().ID) {
+			//check the first case
+			c.cacheLock.Lock()
 			c.timers.moveHead()
+			c.cacheLock.Unlock()
 		} else {
+			//third case happened
 			itemRemoved = false //break the loop if the head has not changed
 		}
 	}
 }
 
-func (c *Cache) BroadcastRenameEvent(e Event) { // suggest a better way of doing this
+func (c *Cache) BroadcastRenameEvent(e Event) {
 	events := make([]Event, 1)
 	events[0] = e
 	c.ProcessedEvents <- events
