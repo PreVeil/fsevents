@@ -228,16 +228,17 @@ func (c *Cache) Start(es *EventStream) {
 	c.timers = TimerCache{make([]TimerCacheItem, MaxCapacity), 0, MaxCapacity, 0, 0}
 	c.ProcessedEvents = es.Events
 
-	ticker := time.NewTicker(100 * time.Millisecond)
-	c.done = make(chan bool)
-	go func() {
-		for {
-			select {
-			case <-c.done:
-				return
-			case <-ticker.C:
-				c.findExpiredEvents()
+	/*
+		ticker := time.NewTicker(100 * time.Millisecond)
+		c.done = make(chan bool)
+		go func() {
+			for {
+				select {
+				case <-c.done:
+					return
+				case <-ticker.C:
+					c.findExpiredEvents()
+				}
 			}
-		}
-	}()
+		}()*/
 }

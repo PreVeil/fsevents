@@ -268,7 +268,7 @@ func TestFseventMultipleRenames(t *testing.T) {
 		}
 	}()
 
-	numberOfFiles := 1000
+	numberOfFiles := 3
 	testFileNameCommon := "TestFseventEvents.testfile"
 	testFile2 := filepath.Join(path, "random")
 	_ = os.Mkdir(testFile2, 0666)
