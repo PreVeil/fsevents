@@ -101,6 +101,7 @@ func (c *Cache) removeHead() {
 	}
 }
 func (c *Cache) addToTimer(eventId uint64) {
+	c.findExpiredEvents()
 	for c.timers.NumberOfItems >= c.timers.Capacity {
 		c.removeHead()
 	}
