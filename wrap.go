@@ -85,6 +85,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		es.EventID = uint64(ids[i])
 	}
 	es.Events <- events
+	es.RenameCache.FindExpiredEvents()
 }
 
 // FSEventStreamRef wraps C.FSEventStreamRef
