@@ -9,6 +9,7 @@ Every 100 miliseconds expired items are evicted from cache and if there is no ma
 package fsevents
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -101,7 +102,7 @@ func (c *Cache) removeHead() {
 	}
 }
 func (c *Cache) addToTimer(eventId uint64) {
-	c.findExpiredEvents()
+	//c.findExpiredEvents()
 	for c.timers.NumberOfItems >= c.timers.Capacity {
 		c.removeHead()
 	}
@@ -191,7 +192,8 @@ This funtion keep removing the first event in the list untill it reaches the 3rd
 func (c *Cache) findExpiredEvents() {
 	itemRemoved := true
 	for c.timers.NumberOfItems > 0 && itemRemoved {
-		if c.timeDifference(c.timers.Head().T)*1000 > int(1*time.Millisecond) {
+		fmt.Println("**************", c.timers.Head())
+		if c.timeDifference(c.timers.Head().T)*10000 > int(1*time.Millisecond) {
 			//The item is expired
 			if c.EventExists(c.timers.Head().ID) {
 				event, matchedEvent, eventExist, matchExist, eventType := c.CheckForMatch(c.timers.Head().ID)
