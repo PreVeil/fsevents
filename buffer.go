@@ -9,7 +9,6 @@ Every 100 miliseconds expired items are evicted from cache and if there is no ma
 package fsevents
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -40,8 +39,10 @@ type TimerCacheItem struct {
 }
 
 func (tc *TimerCache) moveHead() {
-	tc.TimerHead = (tc.TimerHead + 1) % tc.Capacity
-	tc.NumberOfItems--
+	if tc.NumberOfItems > 0 {
+		tc.TimerHead = (tc.TimerHead + 1) % tc.Capacity
+		tc.NumberOfItems--
+	}
 }
 func (tc *TimerCache) Add(t time.Time, id uint64) {
 	tc.Values[tc.TimerTail] = TimerCacheItem{t, id}
@@ -92,7 +93,6 @@ func (c *Cache) CheckForMatch(eventId uint64) (event Event, matchedEvent Event, 
 	return
 }
 func (c *Cache) removeHead() {
-	fmt.Println(" FSEVENT | removeHead")
 	event, matchedEvent, eventExist, matchExist, mode := c.CheckForMatch(c.timers.Head().ID)
 	if mode == "RENAME_TO" {
 		c.createRenameEvent(matchedEvent, event, matchExist, eventExist)
@@ -103,7 +103,6 @@ func (c *Cache) removeHead() {
 	}
 }
 func (c *Cache) addToTimer(eventId uint64) {
-	fmt.Println(" FSEVENT | addToTimer")
 	for c.timers.NumberOfItems >= c.timers.Capacity {
 		c.removeHead()
 	}
@@ -128,7 +127,6 @@ func (c *Cache) EventExists(eventId uint64) bool {
 	return false
 }
 func (c *Cache) Add(e Event, mode string) {
-	fmt.Println(" FSEVENT | ADD")
 	eventId := e.ID
 	if mode == "RENAME_TO" {
 		c.cacheLock.RLock()
@@ -165,7 +163,6 @@ func (c *Cache) Add(e Event, mode string) {
 	}
 }
 func (c *Cache) getEvent(eventId uint64, mode string) (reqEvent Event, exist bool) {
-	fmt.Println(" FSEVENT | getEvent")
 	if mode == "RENAME_TO" {
 		if reqEvent, exist = c.RenameTo[eventId]; exist {
 			c.cacheLock.Lock()
@@ -192,11 +189,8 @@ Check for expired events
 This funtion keep removing the first event in the list untill it reaches the 3rd case
 */
 func (c *Cache) FindExpiredEvents() {
-	fmt.Println(" FSEVENT | findExpiredEvents", c.timers.NumberOfItems)
 	itemRemoved := true
 	for c.timers.NumberOfItems > 0 && itemRemoved {
-		fmt.Println("^^^^^^^^^^^^^^^", c.timers.NumberOfItems)
-		fmt.Println("**************", c.timers.Head())
 		if c.timeDifference(c.timers.Head().T)*10000 > int(1*time.Millisecond) {
 			//The item is expired
 			if c.EventExists(c.timers.Head().ID) {
@@ -223,11 +217,10 @@ func (c *Cache) FindExpiredEvents() {
 }
 
 func (c *Cache) BroadcastRenameEvent(e Event) {
-	fmt.Println(" FSEVENT | BroadcastRenameEvent")
 	events := make([]Event, 1)
 	events[0] = e
 	c.ProcessedEvents <- events
-	c.FindExpiredEvents()
+	//c.FindExpiredEvents()
 }
 
 func (c *Cache) Start(es *EventStream) {

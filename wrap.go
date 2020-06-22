@@ -52,6 +52,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		log.Printf("failed to retrieve registry %d", info)
 		return
 	}
+	es.RenameCache.FindExpiredEvents()
 	// These slices are backed by C data. Ensure data is copied out
 	// if it expected to exist outside of this function.
 	paths := (*[1 << 30]*C.char)(unsafe.Pointer(cpaths))[:l:l]
@@ -85,7 +86,6 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		es.EventID = uint64(ids[i])
 	}
 	es.Events <- events
-	es.RenameCache.FindExpiredEvents()
 }
 
 // FSEventStreamRef wraps C.FSEventStreamRef
