@@ -9,6 +9,7 @@ Every 100 miliseconds expired items are evicted from cache and if there is no ma
 package fsevents
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -127,6 +128,7 @@ func (c *Cache) EventExists(eventId uint64) bool {
 	return false
 }
 func (c *Cache) Add(e Event, mode string) {
+	fmt.Println("Added to cache:", e)
 	eventId := e.ID
 	if mode == "RENAME_TO" {
 		c.cacheLock.RLock()

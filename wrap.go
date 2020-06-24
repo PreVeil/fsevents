@@ -66,6 +66,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		}
 		//IF the event has a renameFlag, exclude the RenameFlag and pass the rest (may include other operations)
 		//Cache the RenameEvent
+		logEventFlag(events[i].Flags, events[i].Path)
 		if events[i].Flags&ItemRenamed == ItemRenamed {
 			cacheRenameEvent := events[i]
 			events[i].Flags = events[i].Flags ^ ItemRenamed
@@ -282,4 +283,37 @@ func stop(stream FSEventStreamRef, rlref CFRunLoopRef) {
 	C.FSEventStreamRelease(stream)
 	C.CFRunLoopStop(C.CFRunLoopRef(rlref))
 	C.CFRelease(C.CFTypeRef(rlref))
+}
+
+func logEventFlag(flags EventFlags, path string) {
+	note := ""
+	for bit, description := range noteDescription {
+		if flags&bit == bit {
+			note += description + " "
+		}
+	}
+	log.Printf("Path: %s  ||  Flags: %s", path, note)
+}
+
+var noteDescription = map[EventFlags]string{
+	MustScanSubDirs: "MustScanSubdirs",
+	UserDropped:     "UserDropped",
+	KernelDropped:   "KernelDropped",
+	EventIDsWrapped: "EventIDsWrapped",
+	HistoryDone:     "HistoryDone",
+	RootChanged:     "RootChanged",
+	Mount:           "Mount",
+	Unmount:         "Unmount",
+
+	ItemCreated:       "Created",
+	ItemRemoved:       "Removed",
+	ItemInodeMetaMod:  "InodeMetaMod",
+	ItemRenamed:       "Renamed",
+	ItemModified:      "Modified",
+	ItemFinderInfoMod: "FinderInfoMod",
+	ItemChangeOwner:   "ChangeOwner",
+	ItemXattrMod:      "XAttrMod",
+	ItemIsFile:        "IsFile",
+	ItemIsDir:         "IsDir",
+	ItemIsSymlink:     "IsSymLink",
 }
