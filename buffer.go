@@ -71,7 +71,7 @@ func (c *Cache) createRenameEvent(oldNameEvent, newNameEvent Event, oldNameExist
 	}
 	c.BroadcastRenameEvent(newNameEvent)
 }
-func (c *Cache) CheckForMatch(eventId uint64) (event Event, matchedEvent Event, eventExist, matchExist bool, mode string) {
+func (c *Cache) CheckForMatch(eventId uint64) (event Event, matchedEvent Event, eventExist, matchExist bool, mode RenameEventType) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 	if event, eventExist = c.RenameFrom[eventId]; eventExist {
@@ -80,7 +80,7 @@ func (c *Cache) CheckForMatch(eventId uint64) (event Event, matchedEvent Event, 
 		if matchExist {
 			delete(c.RenameTo, matchedEvent.ID)
 		}
-		mode = "RENAME_FROM"
+		mode = RenameFrom
 		return
 	} else if event, eventExist = c.RenameTo[eventId]; eventExist {
 		delete(c.RenameTo, event.ID)
@@ -88,17 +88,17 @@ func (c *Cache) CheckForMatch(eventId uint64) (event Event, matchedEvent Event, 
 		if matchExist {
 			delete(c.RenameTo, matchedEvent.ID)
 		}
-		mode = "RENAME_TO"
+		mode = RenameFrom
 		return
 	}
 	return
 }
 func (c *Cache) removeHead() {
 	event, matchedEvent, eventExist, matchExist, mode := c.CheckForMatch(c.timers.Head().ID)
-	if mode == "RENAME_TO" {
+	if mode == RenameTo {
 		c.createRenameEvent(matchedEvent, event, matchExist, eventExist)
 		c.timers.moveHead()
-	} else if mode == "RENAME_FROM" {
+	} else if mode == RenameFrom {
 		c.createRenameEvent(event, matchedEvent, eventExist, matchExist)
 		c.timers.moveHead()
 	}
@@ -127,10 +127,10 @@ func (c *Cache) EventExists(eventId uint64) bool {
 	}
 	return false
 }
-func (c *Cache) Add(e Event, mode string) {
+func (c *Cache) Add(e Event, mode RenameEventType) {
 	fmt.Println("Added to cache:", e)
 	eventId := e.ID
-	if mode == "RENAME_TO" {
+	if mode == RenameTo {
 		c.cacheLock.RLock()
 		renameFromEvent, exist := c.RenameFrom[eventId-1]
 		c.cacheLock.RUnlock()
@@ -164,8 +164,8 @@ func (c *Cache) Add(e Event, mode string) {
 		}
 	}
 }
-func (c *Cache) getEvent(eventId uint64, mode string) (reqEvent Event, exist bool) {
-	if mode == "RENAME_TO" {
+func (c *Cache) getEvent(eventId uint64, mode RenameEventType) (reqEvent Event, exist bool) {
+	if mode == RenameTo {
 		if reqEvent, exist = c.RenameTo[eventId]; exist {
 			c.cacheLock.Lock()
 			delete(c.RenameTo, reqEvent.ID)
@@ -197,7 +197,7 @@ func (c *Cache) FindExpiredEvents() {
 			//The item is expired
 			if c.EventExists(c.timers.Head().ID) {
 				event, matchedEvent, eventExist, matchExist, eventType := c.CheckForMatch(c.timers.Head().ID)
-				if eventType == "RENAME_TO" {
+				if eventType == RenameTo {
 					c.createRenameEvent(matchedEvent, event, matchExist, eventExist)
 				} else {
 					c.createRenameEvent(event, matchedEvent, eventExist, matchExist)

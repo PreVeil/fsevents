@@ -81,6 +81,13 @@ type Event struct {
 	OldPath string
 }
 
+type RenameEventType string
+
+const (
+	RenameTo   RenameEventType = "RENAME_TO"
+	RenameFrom                 = "RENAME_FROM"
+)
+
 // DeviceForPath returns the device ID for the specified volume.
 func DeviceForPath(path string) (int32, error) {
 	stat := syscall.Stat_t{}
