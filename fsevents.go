@@ -4,6 +4,8 @@
 package fsevents
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -79,6 +81,43 @@ type Event struct {
 	Flags   EventFlags
 	ID      uint64
 	OldPath string
+}
+
+func (e Event) GetPath() string {
+	return e.Path
+}
+
+func (e Event) String() string {
+	var ops strings.Builder
+	for bit, description := range noteDescription {
+		if e.Flags&bit == bit {
+			fmt.Fprintf(&ops, "%s ", description)
+		}
+	}
+	return fmt.Sprintf("newpath=%s, oldpath=%s, op=%s, eventID=%d", e.Path, e.OldPath, strings.TrimSpace(ops.String()), e.ID)
+}
+
+var noteDescription = map[EventFlags]string{
+	MustScanSubDirs: "MustScanSubdirs",
+	UserDropped:     "UserDropped",
+	KernelDropped:   "KernelDropped",
+	EventIDsWrapped: "EventIDsWrapped",
+	HistoryDone:     "HistoryDone",
+	RootChanged:     "RootChanged",
+	Mount:           "Mount",
+	Unmount:         "Unmount",
+
+	ItemCreated:       "Created",
+	ItemRemoved:       "Removed",
+	ItemInodeMetaMod:  "InodeMetaMod",
+	ItemRenamed:       "Renamed",
+	ItemModified:      "Modified",
+	ItemFinderInfoMod: "FinderInfoMod",
+	ItemChangeOwner:   "ChangeOwner",
+	ItemXattrMod:      "XAttrMod",
+	ItemIsFile:        "IsFile",
+	ItemIsDir:         "IsDir",
+	ItemIsSymlink:     "IsSymLink",
 }
 
 type RenameEventType string
@@ -188,6 +227,9 @@ func (es *EventStream) Stop() {
 	// Remove eventstream from the registry
 	registry.Delete(es.registryID)
 	es.registryID = 0
+
+	// clean up our RenameCache
+	es.RenameCache.Stop()
 }
 
 // Restart listening.
