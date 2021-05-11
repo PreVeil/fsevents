@@ -52,7 +52,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		log.Printf("failed to retrieve registry %d", info)
 		return
 	}
-	es.RenameCache.FindExpiredEvents()
+	es.renameCache.FindExpiredEvents()
 	// These slices are backed by C data. Ensure data is copied out
 	// if it expected to exist outside of this function.
 	paths := (*[1 << 30]*C.char)(unsafe.Pointer(cpaths))[:l:l]
@@ -79,9 +79,9 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
 			}
 			if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
-				es.RenameCache.Add(cacheRenameEvent, RenameFrom)
+				es.renameCache.Add(cacheRenameEvent, RenameFrom)
 			} else {
-				es.RenameCache.Add(cacheRenameEvent, RenameTo)
+				es.renameCache.Add(cacheRenameEvent, RenameTo)
 			}
 		}
 		es.EventID = uint64(ids[i])

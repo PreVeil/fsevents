@@ -160,7 +160,7 @@ type EventStream struct {
 	// syscall represents this with an int32
 	Device int32
 	// this cache holds events to detect rename
-	RenameCache Cache
+	renameCache Cache
 }
 
 // eventStreamRegistry is a lookup table for EventStream references passed to
@@ -209,7 +209,7 @@ func (es *EventStream) Start() {
 	es.registryID = cbInfo
 	es.uuid = GetDeviceUUID(es.Device)
 	es.start(es.Paths, cbInfo)
-	es.RenameCache.Start(es)
+	es.renameCache.Start(es)
 }
 
 // Flush events that have occurred but haven't been delivered.
@@ -228,8 +228,8 @@ func (es *EventStream) Stop() {
 	registry.Delete(es.registryID)
 	es.registryID = 0
 
-	// clean up our RenameCache
-	es.RenameCache.Stop()
+	// clean up our renameCache
+	es.renameCache.Stop()
 }
 
 // Restart listening.

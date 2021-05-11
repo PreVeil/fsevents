@@ -1,8 +1,8 @@
 /*
+
 The Cache have RenameFrom : oldPath and RenameTo: newPath events cached.
 The time that an event was added is kept in timers cache. It's circular array.
 Every 100 miliseconds expired items are evicted from cache and if there is no match for them CREATE or DELETE event is created.
-
 
 */
 
@@ -119,7 +119,7 @@ func (c *Cache) addToTimer(eventId uint64) {
 	c.timers.Next()
 }
 
-func (c *Cache) timeDifference(t time.Time) int {
+func timeDifference(t time.Time) int {
 	currentTime := time.Now()
 	difference := currentTime.Sub(t)
 	total := int(difference.Milliseconds())
@@ -138,13 +138,11 @@ func (c *Cache) eventExists(eventId uint64) bool {
 }
 
 func (c *Cache) Add(e Event, mode RenameEventType) {
-	// fmt.Println("Added to cache:", e)
 	eventId := e.ID
 	if mode == RenameTo {
 		c.cacheLock.RLock()
 		renameFromEvent, exist := c.RenameFrom[eventId-1]
 		c.cacheLock.RUnlock()
-
 		if exist {
 			c.createRenameEvent(renameFromEvent, e, exist, true)
 			c.cacheLock.Lock()
@@ -160,7 +158,6 @@ func (c *Cache) Add(e Event, mode RenameEventType) {
 		c.cacheLock.RLock()
 		renameToEvent, exist := c.RenameTo[eventId+1]
 		c.cacheLock.RUnlock()
-
 		if exist {
 			c.createRenameEvent(e, renameToEvent, true, exist)
 			c.cacheLock.Lock()
@@ -175,36 +172,16 @@ func (c *Cache) Add(e Event, mode RenameEventType) {
 	}
 }
 
-func (c *Cache) getEvent(eventId uint64, mode RenameEventType) (reqEvent Event, exist bool) {
-	if mode == RenameTo {
-		if reqEvent, exist = c.RenameTo[eventId]; exist {
-			c.cacheLock.Lock()
-			delete(c.RenameTo, reqEvent.ID)
-			c.cacheLock.Unlock()
-		}
-		return
-	} else {
-		if reqEvent, exist = c.RenameFrom[eventId]; exist {
-			c.cacheLock.Lock()
-			delete(c.RenameFrom, reqEvent.ID)
-			c.cacheLock.Unlock()
-		}
-		return
-	}
-}
-
-/*
-Check for expired events
-3 types of event are in the cache
-1- the ones that have been matched
-2- the unmatched ones with expired timer
-3- the unmatched ones waiting for its match
-This funtion keep removing the first event in the list untill it reaches the 3rd case
-*/
+// FindExpiredEvents checks for expired events
+// three types of event are in the cache:
+// 	1. the ones that have been matched
+// 	2. the unmatched ones with expired timer
+// 	3. the unmatched ones waiting for its match
+// It keeps removing the first event in the list until it reaches the 3rd case
 func (c *Cache) FindExpiredEvents() {
 	itemRemoved := true
 	for c.timers.NumberOfItems > 0 && itemRemoved {
-		if c.timeDifference(c.timers.Head().T)*10000 > int(1*time.Millisecond) {
+		if timeDifference(c.timers.Head().T)*10000 > int(1*time.Millisecond) {
 			//The item is expired
 			if c.eventExists(c.timers.Head().ID) {
 				event, matchedEvent, eventExist, matchExist, eventType := c.checkForMatch(c.timers.Head().ID)
@@ -233,7 +210,6 @@ func (c *Cache) broadcastRenameEvent(e Event) {
 	events := make([]Event, 1)
 	events[0] = e
 	c.ProcessedEvents <- events
-	//c.FindExpiredEvents()
 }
 
 func (c *Cache) Start(es *EventStream) {
@@ -249,6 +225,7 @@ func (c *Cache) Start(es *EventStream) {
 		for {
 			select {
 			case <-c.done:
+				ticker.Stop()
 				return
 			case <-ticker.C:
 				c.FindExpiredEvents()
