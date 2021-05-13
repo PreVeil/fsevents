@@ -33,6 +33,7 @@ type Cache struct {
 
 	ProcessedEvents chan []Event
 	done            chan struct{}
+	once            sync.Once
 }
 
 type TimerCacheItem struct {
@@ -235,5 +236,9 @@ func (c *Cache) Start(es *EventStream) {
 }
 
 func (c *Cache) Stop() {
-	close(c.done)
+	// FIXME: EventStream's Stop() is being called more than once by the wrapper
+	// so need this do safely support Stop() here before we figure out what is happening externally.
+	c.once.Do(func() {
+		close(c.done)
+	})
 }
