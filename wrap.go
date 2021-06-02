@@ -187,7 +187,7 @@ func createPaths(paths []string) (C.CFArrayRef, error) {
 			errs = append(errs, err)
 		}
 		str := makeCFString(p)
-		//nolint // unsure how to fix yet
+		//nolint:unused // unsure how to fix yet
 		C.CFArrayAppendValue(C.CFMutableArrayRef(cPaths), unsafe.Pointer(str))
 	}
 	var err error
