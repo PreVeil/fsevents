@@ -52,7 +52,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		log.Printf("failed to retrieve registry %d", info)
 		return
 	}
-	es.renameCache.FindExpiredEvents()
+
 	// These slices are backed by C data. Ensure data is copied out
 	// if it expected to exist outside of this function.
 	paths := (*[1 << 30]*C.char)(unsafe.Pointer(cpaths))[:l:l]
@@ -64,13 +64,14 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
-		//IF the event has a renameFlag, exclude the RenameFlag and pass the rest (may include other operations)
-		//Cache the RenameEvent
-		// logEventFlag(events[i].Flags, events[i].Path)
+		// if the event has a renameFlag, exclude the RenameFlag and pass the rest (may include other operations)
 		if events[i].Flags&ItemRenamed == ItemRenamed {
+			fmt.Println(">>> event 1", events[i].String())
 			cacheRenameEvent := events[i]
 			events[i].Flags = events[i].Flags ^ ItemRenamed
+			fmt.Println(">>> event 2", events[i].String(), cacheRenameEvent)
 			cacheRenameEvent.Flags = ItemRenamed
+
 			if events[i].Flags&ItemIsFile == ItemIsFile {
 				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
 			} else if events[i].Flags&ItemIsDir == ItemIsDir {
@@ -78,7 +79,11 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
 				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
 			}
+			fmt.Println(">>> event 3", cacheRenameEvent)
+
+			// we store rename events in the rename cache so that they can be paired
 			if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
+				// no longer exist in the file system, so treat as the old name
 				es.renameCache.Add(cacheRenameEvent, RenameFrom)
 			} else {
 				es.renameCache.Add(cacheRenameEvent, RenameTo)
@@ -145,9 +150,9 @@ func cfStringToGoString(cfs C.CFStringRef) string {
 	if C.CFStringGetBytes(cfStr, cfRange, enc, 0, C.false, buf, usedBufLen, nil) == 0 {
 		return ""
 	}
-
 	// Create a string (byte array) backed by C byte array
 	header := (*reflect.SliceHeader)(unsafe.Pointer(&bs))
+	//nolint // unsure if it is false positive
 	strHeader := &reflect.StringHeader{
 		Data: header.Data,
 		Len:  header.Len,
@@ -182,6 +187,7 @@ func createPaths(paths []string) (C.CFArrayRef, error) {
 			errs = append(errs, err)
 		}
 		str := makeCFString(p)
+		//nolint // unsure how to fix yet
 		C.CFArrayAppendValue(C.CFMutableArrayRef(cPaths), unsafe.Pointer(str))
 	}
 	var err error

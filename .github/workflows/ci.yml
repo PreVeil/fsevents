@@ -33,5 +33,15 @@ jobs:
     - name: Run unit tests
       run: go test ./... -v -race
 
-    - name: Vetting code quality
-      run: go vet
+  golangci:
+    name: lint
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: latest
+
+          args: --config golangci.yml ./...
