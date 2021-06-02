@@ -12,7 +12,6 @@ linters:
   enable:
     - gofmt
     - goimports
-    - golint
     - gosimple
     - ineffassign
     - misspell

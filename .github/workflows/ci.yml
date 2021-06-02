@@ -34,7 +34,7 @@ jobs:
       run: go test ./... -v -race
 
   golangci:
-    name: lint
+    name: Linter
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2

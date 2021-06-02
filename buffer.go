@@ -78,10 +78,10 @@ func (c *Cache) createRenameEvent(oldNameEvent, newNameEvent Event, oldNameExist
 	c.broadcastRenameEvent(newNameEvent)
 }
 
-func (c *Cache) checkForMatch(eventId uint64) (event Event, matchedEvent Event, eventExist, matchExist bool, mode RenameEventType) {
+func (c *Cache) checkForMatch(eventID uint64) (event Event, matchedEvent Event, eventExist, matchExist bool, mode RenameEventType) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
-	if event, eventExist = c.RenameFrom[eventId]; eventExist {
+	if event, eventExist = c.RenameFrom[eventID]; eventExist {
 		delete(c.RenameFrom, event.ID)
 		matchedEvent, matchExist = c.RenameTo[event.ID+1]
 		if matchExist {
@@ -89,7 +89,7 @@ func (c *Cache) checkForMatch(eventId uint64) (event Event, matchedEvent Event, 
 		}
 		mode = RenameFrom
 		return
-	} else if event, eventExist = c.RenameTo[eventId]; eventExist {
+	} else if event, eventExist = c.RenameTo[eventID]; eventExist {
 		delete(c.RenameTo, event.ID)
 		matchedEvent, matchExist = c.RenameFrom[event.ID-1]
 		if matchExist {
@@ -112,11 +112,11 @@ func (c *Cache) removeHead() {
 	}
 }
 
-func (c *Cache) addToTimer(eventId uint64) {
+func (c *Cache) addToTimer(eventID uint64) {
 	for c.timers.NumberOfItems >= c.timers.Capacity {
 		c.removeHead()
 	}
-	c.timers.Add(time.Now(), eventId)
+	c.timers.Add(time.Now(), eventID)
 	c.timers.Next()
 }
 
@@ -127,22 +127,22 @@ func timeDifference(t time.Time) int {
 	return total
 }
 
-func (c *Cache) eventExists(eventId uint64) bool {
+func (c *Cache) eventExists(eventID uint64) bool {
 	c.cacheLock.RLock()
 	defer c.cacheLock.RUnlock()
-	if _, exist := c.RenameFrom[eventId]; exist {
+	if _, exist := c.RenameFrom[eventID]; exist {
 		return true
-	} else if _, exist := c.RenameTo[eventId]; exist {
+	} else if _, exist := c.RenameTo[eventID]; exist {
 		return true
 	}
 	return false
 }
 
 func (c *Cache) Add(e Event, mode RenameEventType) {
-	eventId := e.ID
+	eventID := e.ID
 	if mode == RenameTo {
 		c.cacheLock.RLock()
-		renameFromEvent, exist := c.RenameFrom[eventId-1]
+		renameFromEvent, exist := c.RenameFrom[eventID-1]
 		c.cacheLock.RUnlock()
 		if exist {
 			c.createRenameEvent(renameFromEvent, e, exist, true)
@@ -157,7 +157,7 @@ func (c *Cache) Add(e Event, mode RenameEventType) {
 		}
 	} else {
 		c.cacheLock.RLock()
-		renameToEvent, exist := c.RenameTo[eventId+1]
+		renameToEvent, exist := c.RenameTo[eventID+1]
 		c.cacheLock.RUnlock()
 		if exist {
 			c.createRenameEvent(e, renameToEvent, true, exist)
