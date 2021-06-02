@@ -3,6 +3,8 @@
 package fsevents
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -30,13 +32,34 @@ func (c *counter) reset() {
 	atomic.StoreInt32(&c.val, 0)
 }
 
-func TestBasicExample(t *testing.T) {
-	path, err := ioutil.TempDir("", "fsexample")
+func generateTempDir(t *testing.T) string {
+	path, err := os.UserCacheDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(path)
+	randStr, err := randString(6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := filepath.Join(path, randStr)
+	err = os.MkdirAll(tmpDir, 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tmpDir
+}
 
+func randString(bytes int) (string, error) {
+	buf := make([]byte, bytes)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf[:])[:len(buf)], nil
+}
+
+func TestBasicExample(t *testing.T) {
+	path := generateTempDir(t)
 	dev, err := DeviceForPath(path)
 	if err != nil {
 		t.Fatal(err)
@@ -73,12 +96,7 @@ func TestBasicExample(t *testing.T) {
 
 // creates a file, modifies it, rename it, delete it! the first 3 events should be
 func TestFseventRename(t *testing.T) {
-	path, err := ioutil.TempDir("", "fsexample")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(path)
-
+	path := generateTempDir(t)
 	dev, err := DeviceForPath(path)
 	if err != nil {
 		t.Fatal(err)
@@ -145,12 +163,7 @@ func TestFseventRename(t *testing.T) {
 }
 
 func TestFseventRenameEventAttributes(t *testing.T) {
-	path, err := ioutil.TempDir("", "fsexample")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(path)
-
+	path := generateTempDir(t)
 	dev, err := DeviceForPath(path)
 	if err != nil {
 		t.Fatal(err)
@@ -218,12 +231,7 @@ func TestFseventRenameEventAttributes(t *testing.T) {
 }
 
 func TestFseventMultipleRenames(t *testing.T) {
-	path, err := ioutil.TempDir("", "fsexample")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(path)
-
+	path := generateTempDir(t)
 	dev, err := DeviceForPath(path)
 	if err != nil {
 		t.Fatal(err)
