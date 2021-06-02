@@ -39,7 +39,7 @@ install-golangci-lint:
 test: test-unit
 
 test-unit: install-dep-tools testclean
-	$(GOTEST) ./...
+	$(GOTEST) ./... -v -race
 
 testclean:
 	$(GO) clean -testcache || true
