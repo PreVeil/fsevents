@@ -175,8 +175,8 @@ func TestFSEventMultipleRenames(t *testing.T) {
 							t.Errorf("rename order messed up: %#v", event)
 						}
 						renameReceived.increment()
+						t.Logf("Rename event received: %#v", event)
 					}
-					t.Logf("Event: %#v", event)
 				}
 			}
 		}
@@ -202,7 +202,6 @@ func TestFSEventMultipleRenames(t *testing.T) {
 	}
 
 	time.Sleep(1000 * time.Millisecond)
-	t.Logf("Event: %#v", renameReceived.value())
 	if renameReceived.value() != int32(numberOfFiles) {
 		t.Fatal("missing fsevents rename events")
 	}

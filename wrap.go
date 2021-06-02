@@ -64,14 +64,15 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
-		// if the event has a renameFlag, exclude the RenameFlag and pass the rest (may include other operations)
+
+		// for a rename action, fsevents generate two events that contain rename to and rename from in path field
+		// so, we store rename events in the rename cache so that they can be paired
 		if events[i].Flags&ItemRenamed == ItemRenamed {
-			fmt.Println(">>> event 1", events[i].String())
 			cacheRenameEvent := events[i]
-			events[i].Flags = events[i].Flags ^ ItemRenamed
-			fmt.Println(">>> event 2", events[i].String(), cacheRenameEvent)
+			events[i].Flags = events[i].Flags ^ ItemRenamed // remove rename flag
 			cacheRenameEvent.Flags = ItemRenamed
 
+			// re add fstype to the rename event we will be caching
 			if events[i].Flags&ItemIsFile == ItemIsFile {
 				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
 			} else if events[i].Flags&ItemIsDir == ItemIsDir {
@@ -79,9 +80,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
 				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
 			}
-			fmt.Println(">>> event 3", cacheRenameEvent)
 
-			// we store rename events in the rename cache so that they can be paired
 			if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
 				// no longer exist in the file system, so treat as the old name
 				es.renameCache.Add(cacheRenameEvent, RenameFrom)
