@@ -157,8 +157,12 @@ type EventStream struct {
 	EventID uint64
 	Resume  bool
 	Latency time.Duration
+
 	// syscall represents this with an int32
+	// if we specify a device id, each path we pass to `Paths` has to be a relative path to that device volume path (that is why we see the forward slash of each abs path being watched is cut off).
+	// by not specifying a device uuid, the stream will figure out the volume's device itself and the abs path to watch can be used.
 	Device int32
+
 	// this cache holds events to detect rename
 	renameCache Cache
 }
