@@ -95,7 +95,10 @@ func TestBasicExample(t *testing.T) {
 }
 
 func TestFSEventBasicRename(t *testing.T) {
-	path := generateTempDir(t)
+	path, err := ioutil.TempDir("", "this also works test dir")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer os.RemoveAll(path)
 
 	es := &EventStream{
