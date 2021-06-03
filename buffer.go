@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	MaxCapacity = 2000
+	MaxCapacity          = 2000
+	enabledRenamePairing = true
 )
 
 type TimerCache struct {
@@ -208,9 +209,7 @@ func (c *Cache) FindExpiredEvents() {
 }
 
 func (c *Cache) broadcastRenameEvent(e Event) {
-	events := make([]Event, 1)
-	events[0] = e
-	c.ProcessedEvents <- events
+	c.ProcessedEvents <- []Event{e}
 }
 
 func (c *Cache) Start(es *EventStream) {

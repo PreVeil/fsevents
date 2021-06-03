@@ -78,7 +78,7 @@ func TestBasicExample(t *testing.T) {
 	go func() {
 		for msg := range es.Events {
 			for _, event := range msg {
-				t.Logf("Event: %#v", event)
+				t.Logf("Event: %s", event)
 				wait <- event
 				es.Stop()
 				return
@@ -175,7 +175,7 @@ func TestFSEventMultipleRenames(t *testing.T) {
 							t.Errorf("rename order messed up: %#v", event)
 						}
 						renameReceived.increment()
-						t.Logf("Rename event received: %#v", event)
+						t.Logf("Rename event received: %s", event)
 					}
 				}
 			}
@@ -213,7 +213,6 @@ func testRename(file1, file2 string) error {
 	case "windows", "plan9":
 		return os.Rename(file1, file2)
 	default:
-		cmd := exec.Command("mv", file1, file2)
-		return cmd.Run()
+		return exec.Command("mv", file1, file2).Run()
 	}
 }

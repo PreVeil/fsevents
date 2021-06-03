@@ -64,28 +64,29 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
+		if enabledRenamePairing {
+			// for a rename action, fsevents generate two events that contain rename to and rename from in path field
+			// so, we store rename events in the rename cache so that they can be paired
+			if events[i].Flags&ItemRenamed == ItemRenamed {
+				cacheRenameEvent := events[i]
+				events[i].Flags = events[i].Flags ^ ItemRenamed // remove rename flag
+				cacheRenameEvent.Flags = ItemRenamed
 
-		// for a rename action, fsevents generate two events that contain rename to and rename from in path field
-		// so, we store rename events in the rename cache so that they can be paired
-		if events[i].Flags&ItemRenamed == ItemRenamed {
-			cacheRenameEvent := events[i]
-			events[i].Flags = events[i].Flags ^ ItemRenamed // remove rename flag
-			cacheRenameEvent.Flags = ItemRenamed
+				// re add fstype to the rename event we will be caching
+				if events[i].Flags&ItemIsFile == ItemIsFile {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
+				} else if events[i].Flags&ItemIsDir == ItemIsDir {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsDir
+				} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
+				}
 
-			// re add fstype to the rename event we will be caching
-			if events[i].Flags&ItemIsFile == ItemIsFile {
-				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
-			} else if events[i].Flags&ItemIsDir == ItemIsDir {
-				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsDir
-			} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
-				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
-			}
-
-			if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
-				// no longer exist in the file system, so treat as the old name
-				es.renameCache.Add(cacheRenameEvent, RenameFrom)
-			} else {
-				es.renameCache.Add(cacheRenameEvent, RenameTo)
+				if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
+					// no longer exist in the file system, so treat as the old name
+					es.renameCache.Add(cacheRenameEvent, RenameFrom)
+				} else {
+					es.renameCache.Add(cacheRenameEvent, RenameTo)
+				}
 			}
 		}
 		es.EventID = uint64(ids[i])

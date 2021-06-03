@@ -6,6 +6,8 @@ USAGE:
 	lint: run golangci-linter
 
 	clean: clean test cache and other deps
+
+	help: print this help message
 ]
 endef
 export USAGE
@@ -51,3 +53,5 @@ clean: testclean
 
 lint: install-dep-tools
 	$(LINT) run --config golangci.yml ./...
+
+ci: test lint
