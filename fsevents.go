@@ -4,6 +4,8 @@
 package fsevents
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -81,6 +83,43 @@ type Event struct {
 	OldPath string
 }
 
+func (e Event) GetPath() string {
+	return e.Path
+}
+
+func (e Event) String() string {
+	var ops strings.Builder
+	for bit, description := range noteDescription {
+		if e.Flags&bit == bit {
+			fmt.Fprintf(&ops, "%s ", description)
+		}
+	}
+	return fmt.Sprintf("newpath=%s, oldpath=%s, op=%s, eventID=%d", e.Path, e.OldPath, strings.TrimSpace(ops.String()), e.ID)
+}
+
+var noteDescription = map[EventFlags]string{
+	MustScanSubDirs: "MustScanSubdirs",
+	UserDropped:     "UserDropped",
+	KernelDropped:   "KernelDropped",
+	EventIDsWrapped: "EventIDsWrapped",
+	HistoryDone:     "HistoryDone",
+	RootChanged:     "RootChanged",
+	Mount:           "Mount",
+	Unmount:         "Unmount",
+
+	ItemCreated:       "Created",
+	ItemRemoved:       "Removed",
+	ItemInodeMetaMod:  "InodeMetaMod",
+	ItemRenamed:       "Renamed",
+	ItemModified:      "Modified",
+	ItemFinderInfoMod: "FinderInfoMod",
+	ItemChangeOwner:   "ChangeOwner",
+	ItemXattrMod:      "XAttrMod",
+	ItemIsFile:        "IsFile",
+	ItemIsDir:         "IsDir",
+	ItemIsSymlink:     "IsSymLink",
+}
+
 type RenameEventType string
 
 const (
@@ -118,10 +157,14 @@ type EventStream struct {
 	EventID uint64
 	Resume  bool
 	Latency time.Duration
+
 	// syscall represents this with an int32
+	// if we specify a device id, each path we pass to `Paths` has to be a relative path to that device volume path (that is why we see the forward slash of each abs path being watched is cut off).
+	// by not specifying a device uuid, the stream will figure out the volume's device itself and the abs path to watch can be used.
 	Device int32
+
 	// this cache holds events to detect rename
-	RenameCache Cache
+	renameCache Cache
 }
 
 // eventStreamRegistry is a lookup table for EventStream references passed to
@@ -170,7 +213,7 @@ func (es *EventStream) Start() {
 	es.registryID = cbInfo
 	es.uuid = GetDeviceUUID(es.Device)
 	es.start(es.Paths, cbInfo)
-	es.RenameCache.Start(es)
+	es.renameCache.Start(es)
 }
 
 // Flush events that have occurred but haven't been delivered.
@@ -188,6 +231,9 @@ func (es *EventStream) Stop() {
 	// Remove eventstream from the registry
 	registry.Delete(es.registryID)
 	es.registryID = 0
+
+	// clean up our renameCache
+	es.renameCache.Stop()
 }
 
 // Restart listening.

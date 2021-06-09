@@ -52,7 +52,7 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 		log.Printf("failed to retrieve registry %d", info)
 		return
 	}
-	es.RenameCache.FindExpiredEvents()
+
 	// These slices are backed by C data. Ensure data is copied out
 	// if it expected to exist outside of this function.
 	paths := (*[1 << 30]*C.char)(unsafe.Pointer(cpaths))[:l:l]
@@ -64,24 +64,29 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
-		//IF the event has a renameFlag, exclude the RenameFlag and pass the rest (may include other operations)
-		//Cache the RenameEvent
-		logEventFlag(events[i].Flags, events[i].Path)
-		if events[i].Flags&ItemRenamed == ItemRenamed {
-			cacheRenameEvent := events[i]
-			events[i].Flags = events[i].Flags ^ ItemRenamed
-			cacheRenameEvent.Flags = ItemRenamed
-			if events[i].Flags&ItemIsFile == ItemIsFile {
-				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
-			} else if events[i].Flags&ItemIsDir == ItemIsDir {
-				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsDir
-			} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
-				cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
-			}
-			if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
-				es.RenameCache.Add(cacheRenameEvent, RenameFrom)
-			} else {
-				es.RenameCache.Add(cacheRenameEvent, RenameTo)
+		if enabledRenamePairing {
+			// for a rename action, fsevents generate two events that contain rename to and rename from in path field
+			// so, we store rename events in the rename cache so that they can be paired
+			if events[i].Flags&ItemRenamed == ItemRenamed {
+				cacheRenameEvent := events[i]
+				events[i].Flags = events[i].Flags ^ ItemRenamed // remove rename flag
+				cacheRenameEvent.Flags = ItemRenamed
+
+				// re add fstype to the rename event we will be caching
+				if events[i].Flags&ItemIsFile == ItemIsFile {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
+				} else if events[i].Flags&ItemIsDir == ItemIsDir {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsDir
+				} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
+				}
+
+				if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
+					// no longer exist in the file system, so treat as the old name
+					es.renameCache.Add(cacheRenameEvent, RenameFrom)
+				} else {
+					es.renameCache.Add(cacheRenameEvent, RenameTo)
+				}
 			}
 		}
 		es.EventID = uint64(ids[i])
@@ -145,9 +150,9 @@ func cfStringToGoString(cfs C.CFStringRef) string {
 	if C.CFStringGetBytes(cfStr, cfRange, enc, 0, C.false, buf, usedBufLen, nil) == 0 {
 		return ""
 	}
-
 	// Create a string (byte array) backed by C byte array
 	header := (*reflect.SliceHeader)(unsafe.Pointer(&bs))
+	//nolint // unsure if it is false positive
 	strHeader := &reflect.StringHeader{
 		Data: header.Data,
 		Len:  header.Len,
@@ -182,6 +187,7 @@ func createPaths(paths []string) (C.CFArrayRef, error) {
 			errs = append(errs, err)
 		}
 		str := makeCFString(p)
+		//nolint:unused // unsure how to fix yet
 		C.CFArrayAppendValue(C.CFMutableArrayRef(cPaths), unsafe.Pointer(str))
 	}
 	var err error
@@ -283,37 +289,4 @@ func stop(stream FSEventStreamRef, rlref CFRunLoopRef) {
 	C.FSEventStreamRelease(stream)
 	C.CFRunLoopStop(C.CFRunLoopRef(rlref))
 	C.CFRelease(C.CFTypeRef(rlref))
-}
-
-func logEventFlag(flags EventFlags, path string) {
-	note := ""
-	for bit, description := range noteDescription {
-		if flags&bit == bit {
-			note += description + " "
-		}
-	}
-	log.Printf("Path: %s  ||  Flags: %s", path, note)
-}
-
-var noteDescription = map[EventFlags]string{
-	MustScanSubDirs: "MustScanSubdirs",
-	UserDropped:     "UserDropped",
-	KernelDropped:   "KernelDropped",
-	EventIDsWrapped: "EventIDsWrapped",
-	HistoryDone:     "HistoryDone",
-	RootChanged:     "RootChanged",
-	Mount:           "Mount",
-	Unmount:         "Unmount",
-
-	ItemCreated:       "Created",
-	ItemRemoved:       "Removed",
-	ItemInodeMetaMod:  "InodeMetaMod",
-	ItemRenamed:       "Renamed",
-	ItemModified:      "Modified",
-	ItemFinderInfoMod: "FinderInfoMod",
-	ItemChangeOwner:   "ChangeOwner",
-	ItemXattrMod:      "XAttrMod",
-	ItemIsFile:        "IsFile",
-	ItemIsDir:         "IsDir",
-	ItemIsSymlink:     "IsSymLink",
 }

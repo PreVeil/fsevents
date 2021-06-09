@@ -1,3 +1,4 @@
+![](https://github.com/PreVeil/fsevents/workflows/CI/badge.svg)
 # FSEvents bindings for Go (macOS)
 
 [![GoDoc](https://godoc.org/github.com/fsnotify/fsevents?status.svg)](https://godoc.org/github.com/fsnotify/fsevents) [![Build Status](https://travis-ci.org/fsnotify/fsevents.svg?branch=master)](https://travis-ci.org/fsnotify/fsevents) [![codecov](https://codecov.io/gh/fsnotify/fsevents/branch/master/graph/badge.svg)](https://codecov.io/gh/fsnotify/fsevents) [![Reviewed by Hound](https://img.shields.io/badge/Reviewed_by-Hound-8E64B0.svg)](https://houndci.com)
