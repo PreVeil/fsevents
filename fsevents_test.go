@@ -3,20 +3,63 @@
 package fsevents
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestBasicExample(t *testing.T) {
-	path, err := ioutil.TempDir("", "fsexample")
+type counter struct {
+	val int32
+}
+
+func (c *counter) increment() {
+	atomic.AddInt32(&c.val, 1)
+}
+
+func (c *counter) value() int32 {
+	return atomic.LoadInt32(&c.val)
+}
+
+func (c *counter) reset() {
+	atomic.StoreInt32(&c.val, 0)
+}
+
+func generateTempDir(t *testing.T) string {
+	path, err := os.UserCacheDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(path)
+	randStr, err := randString(6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := filepath.Join(path, randStr)
+	err = os.MkdirAll(tmpDir, 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tmpDir
+}
 
+func randString(bytes int) (string, error) {
+	buf := make([]byte, bytes)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf[:])[:len(buf)], nil
+}
+
+func TestBasicExample(t *testing.T) {
+	path := generateTempDir(t)
 	dev, err := DeviceForPath(path)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +78,7 @@ func TestBasicExample(t *testing.T) {
 	go func() {
 		for msg := range es.Events {
 			for _, event := range msg {
-				t.Logf("Event: %#v", event)
+				t.Logf("Event: %s", event)
 				wait <- event
 				es.Stop()
 				return
@@ -49,4 +92,130 @@ func TestBasicExample(t *testing.T) {
 	}
 
 	<-wait
+}
+
+func TestFSEventBasicRename(t *testing.T) {
+	path, err := ioutil.TempDir("", "this also works test dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(path)
+
+	es := &EventStream{
+		Paths:   []string{path},
+		Latency: 500 * time.Millisecond,
+		Flags:   FileEvents,
+	}
+
+	es.Start()
+	defer es.Stop()
+
+	var renameReceived counter
+	wait := make(chan bool)
+	testFile := filepath.Join(path, "TestFseventEvents.testfile")
+	testFileRenamed := filepath.Join(path, "TestFseventEvents.testfileRenamed")
+	go func() {
+		for {
+			select {
+			case <-wait:
+				return
+			case msg := <-es.Events:
+				for _, event := range msg {
+					if event.Flags&ItemRenamed == ItemRenamed {
+						if event.Path == testFile {
+							if event.OldPath != testFileRenamed {
+								t.Logf("unexpected old name for a file in rename event: %#v", event)
+							}
+						}
+						renameReceived.increment()
+					}
+				}
+			}
+		}
+	}()
+
+	f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatalf("creating test file failed: %s", err)
+	}
+	f.WriteString("data")
+	f.Sync()
+	f.Close()
+
+	if err := testRename(testFile, testFileRenamed); err != nil {
+		t.Fatalf("rename failed: %s", err)
+	}
+	time.Sleep(700 * time.Millisecond)
+	if renameReceived.value() != 1 {
+		t.Fatal("the expected rename events have not been received after 500 ms")
+	}
+	close(wait)
+}
+
+func TestFSEventMultipleRenames(t *testing.T) {
+	path := generateTempDir(t)
+	defer os.RemoveAll(path)
+
+	es := &EventStream{
+		Paths:   []string{path},
+		Latency: 500 * time.Millisecond,
+		Flags:   FileEvents,
+	}
+	es.Start()
+	defer es.Stop()
+
+	var renameReceived counter
+	wait := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-wait:
+				return
+			case msg := <-es.Events:
+				for _, event := range msg {
+					if event.Flags&ItemRenamed == ItemRenamed {
+						if filepath.Base(event.Path) == filepath.Join(filepath.Base(event.OldPath), "Renamed") {
+							t.Errorf("rename order messed up: %#v", event)
+						}
+						renameReceived.increment()
+						t.Logf("Rename event received: %s", event)
+					}
+				}
+			}
+		}
+	}()
+
+	testFileNameCommon := "FSEvents.testfile"
+	renameAction := func(t *testing.T, count string) {
+		testFile := filepath.Join(path, testFileNameCommon+count)
+		f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			t.Fatalf("creating test file failed: %s", err)
+		}
+		f.Close()
+		testFileRenamed := filepath.Join(path, testFileNameCommon+count+"Renamed")
+		if err := testRename(testFile, testFileRenamed); err != nil {
+			t.Fatalf("rename action failed (SYSCALL): %s", err)
+		}
+	}
+
+	numberOfFiles := 3
+	for i := 0; i < numberOfFiles; i++ {
+		go renameAction(t, strconv.Itoa(i))
+	}
+
+	time.Sleep(1000 * time.Millisecond)
+	if renameReceived.value() != int32(numberOfFiles) {
+		t.Fatal("missing fsevents rename events")
+	}
+	close(wait)
+}
+
+func testRename(file1, file2 string) error {
+	switch runtime.GOOS {
+	case "windows", "plan9":
+		return os.Rename(file1, file2)
+	default:
+		return exec.Command("mv", file1, file2).Run()
+	}
 }

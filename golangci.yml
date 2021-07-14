@@ -1,0 +1,23 @@
+run:
+  deadline: 2m
+
+# all available settings of specific linters
+linters-settings:
+  nolintlint:
+    # Enable to require an explanation of nonzero length after each nolint directive. Default is false.
+    require-explanation: true
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - gosimple
+    - ineffassign
+    - misspell
+    - govet
+    - nolintlint
+    - whitespace
+    - dupl
+    - rowserrcheck
+    - unparam

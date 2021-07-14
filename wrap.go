@@ -27,6 +27,7 @@ import "C"
 import (
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -46,12 +47,12 @@ func LatestEventID() uint64 {
 func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, cpaths **C.char, cflags *C.FSEventStreamEventFlags, cids *C.FSEventStreamEventId) {
 	l := int(numEvents)
 	events := make([]Event, l)
-
 	es := registry.Get(info)
 	if es == nil {
 		log.Printf("failed to retrieve registry %d", info)
 		return
 	}
+
 	// These slices are backed by C data. Ensure data is copied out
 	// if it expected to exist outside of this function.
 	paths := (*[1 << 30]*C.char)(unsafe.Pointer(cpaths))[:l:l]
@@ -63,9 +64,33 @@ func fsevtCallback(stream C.FSEventStreamRef, info uintptr, numEvents C.size_t, 
 			Flags: EventFlags(flags[i]),
 			ID:    uint64(ids[i]),
 		}
+		if enabledRenamePairing {
+			// for a rename action, fsevents generate two events that contain rename to and rename from in path field
+			// so, we store rename events in the rename cache so that they can be paired
+			if events[i].Flags&ItemRenamed == ItemRenamed {
+				cacheRenameEvent := events[i]
+				events[i].Flags = events[i].Flags ^ ItemRenamed // remove rename flag
+				cacheRenameEvent.Flags = ItemRenamed
+
+				// re add fstype to the rename event we will be caching
+				if events[i].Flags&ItemIsFile == ItemIsFile {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsFile
+				} else if events[i].Flags&ItemIsDir == ItemIsDir {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsDir
+				} else if events[i].Flags&ItemIsSymlink == ItemIsSymlink {
+					cacheRenameEvent.Flags = cacheRenameEvent.Flags | ItemIsSymlink
+				}
+
+				if _, err := os.Stat(cacheRenameEvent.Path); err != nil {
+					// no longer exist in the file system, so treat as the old name
+					es.renameCache.Add(cacheRenameEvent, RenameFrom)
+				} else {
+					es.renameCache.Add(cacheRenameEvent, RenameTo)
+				}
+			}
+		}
 		es.EventID = uint64(ids[i])
 	}
-
 	es.Events <- events
 }
 
@@ -125,9 +150,9 @@ func cfStringToGoString(cfs C.CFStringRef) string {
 	if C.CFStringGetBytes(cfStr, cfRange, enc, 0, C.false, buf, usedBufLen, nil) == 0 {
 		return ""
 	}
-
 	// Create a string (byte array) backed by C byte array
 	header := (*reflect.SliceHeader)(unsafe.Pointer(&bs))
+	//nolint // unsure if it is false positive
 	strHeader := &reflect.StringHeader{
 		Data: header.Data,
 		Len:  header.Len,
@@ -162,6 +187,7 @@ func createPaths(paths []string) (C.CFArrayRef, error) {
 			errs = append(errs, err)
 		}
 		str := makeCFString(p)
+		//nolint:unused // unsure how to fix yet
 		C.CFArrayAppendValue(C.CFMutableArrayRef(cPaths), unsafe.Pointer(str))
 	}
 	var err error
@@ -212,7 +238,6 @@ func setupStream(paths []string, flags CreateFlags, callbackInfo uintptr, eventI
 }
 
 func (es *EventStream) start(paths []string, callbackInfo uintptr) {
-
 	since := eventIDSinceNow
 	if es.Resume {
 		since = es.EventID

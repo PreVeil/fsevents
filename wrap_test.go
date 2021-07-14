@@ -41,7 +41,7 @@ func TestEventStream(t *testing.T) {
 }
 
 func TestDeviceID(t *testing.T) {
-	// Verify compatible devide ID is returned
+	// Verify compatible deviceID is returned
 	// Probably a way to verify this UUID as well...
 
 	did, err := DeviceForPath("/")
