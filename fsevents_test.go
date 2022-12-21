@@ -153,8 +153,8 @@ func TestIssue48(t *testing.T) {
 		for msg := range es.Events {
 			for _, event := range msg {
 				t.Logf("Event: %#v", event)
-				wait <- event
 				es.Stop()
+				wait <- event
 				return
 			}
 		}
