@@ -176,9 +176,10 @@ func (c *Cache) Add(e Event, mode RenameEventType) {
 
 // FindExpiredEvents checks for expired events
 // three types of event are in the cache:
-// 	1. the ones that have been matched
-// 	2. the unmatched ones with expired timer
-// 	3. the unmatched ones waiting for its match
+//  1. the ones that have been matched
+//  2. the unmatched ones with expired timer
+//  3. the unmatched ones waiting for its match
+//
 // It keeps removing the first event in the list until it reaches the 3rd case
 func (c *Cache) FindExpiredEvents() {
 	itemRemoved := true
@@ -235,7 +236,7 @@ func (c *Cache) Start(es *EventStream) {
 }
 
 func (c *Cache) Stop() {
-	if (c.done == nil) {
+	if c.done == nil {
 		return
 	}
 
