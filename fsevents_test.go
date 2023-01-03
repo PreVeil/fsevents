@@ -309,7 +309,7 @@ func TestFSEventMultipleRenames(t *testing.T) {
 	testFileNameCommon := "FSEvents.testfile"
 	errs := make(chan error)
 	defer close(errs)
-	renameAction := func(t *testing.T, count string) {
+	renameAction := func(count string) {
 		testFile := filepath.Join(path, testFileNameCommon+count)
 		f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
@@ -324,7 +324,7 @@ func TestFSEventMultipleRenames(t *testing.T) {
 
 	numberOfFiles := 3
 	for i := 0; i < numberOfFiles; i++ {
-		go renameAction(t, strconv.Itoa(i))
+		go renameAction(strconv.Itoa(i))
 	}
 
 	time.Sleep(1000 * time.Millisecond)
