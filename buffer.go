@@ -235,6 +235,10 @@ func (c *Cache) Start(es *EventStream) {
 }
 
 func (c *Cache) Stop() {
+	if (c.done == nil) {
+		return
+	}
+
 	// FIXME: EventStream's Stop() is being called more than once by the wrapper
 	// so need this do safely support Stop() here before we figure out what is happening externally.
 	c.once.Do(func() {
