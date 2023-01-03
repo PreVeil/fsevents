@@ -307,16 +307,18 @@ func TestFSEventMultipleRenames(t *testing.T) {
 	}()
 
 	testFileNameCommon := "FSEvents.testfile"
+	errs := make(chan error)
+	defer close(errs)
 	renameAction := func(t *testing.T, count string) {
 		testFile := filepath.Join(path, testFileNameCommon+count)
 		f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			t.Fatalf("creating test file failed: %s", err)
+			errs <- err
 		}
 		f.Close()
 		testFileRenamed := filepath.Join(path, testFileNameCommon+count+"Renamed")
 		if err := testRename(testFile, testFileRenamed); err != nil {
-			t.Fatalf("rename action failed (SYSCALL): %s", err)
+			errs <- err
 		}
 	}
 
@@ -326,6 +328,13 @@ func TestFSEventMultipleRenames(t *testing.T) {
 	}
 
 	time.Sleep(1000 * time.Millisecond)
+
+	select {
+	case err := <-errs:
+		t.Fatal(err)
+	default:
+	}
+
 	if renameReceived.value() != int32(numberOfFiles) {
 		t.Fatal("missing fsevents rename events")
 	}
