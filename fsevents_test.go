@@ -1,3 +1,4 @@
+//go:build darwin
 // +build darwin
 
 package fsevents
@@ -5,6 +6,7 @@ package fsevents
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -34,6 +36,10 @@ func (c *counter) reset() {
 
 func generateTempDir(t *testing.T) string {
 	path, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err = filepath.EvalSymlinks(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +78,10 @@ func TestBasicExample(t *testing.T) {
 		Flags:   FileEvents,
 	}
 
-	es.Start()
+	err = es.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	wait := make(chan Event)
 	go func() {
@@ -90,8 +99,120 @@ func TestBasicExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	select {
+	case <-wait:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for event")
+	}
+}
 
+func TestIssue48(t *testing.T) {
+	// FSEvents fails to start when watching >4096 paths
+	// This test validates that limit and checks that the error is propagated
+
+	path, err := ioutil.TempDir("", "fsmanyfiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(path)
+
+	// TODO: using this value fails to start
+	// dev, err := DeviceForPath(path)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	var filenames []string
+	for i := 0; i < 4096; i++ {
+		newFilename := filepath.Join(path, fmt.Sprint("test", i))
+		err = ioutil.WriteFile(newFilename, []byte("test"), 0700)
+		if err != nil {
+			t.Fatal(err)
+		}
+		filenames = append(filenames, newFilename)
+	}
+
+	es := &EventStream{
+		Paths:   filenames,
+		Latency: 500 * time.Millisecond,
+		Device:  0, //dev,
+		Flags:   FileEvents,
+	}
+
+	err = es.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wait := make(chan Event)
+	go func() {
+		for msg := range es.Events {
+			for _, event := range msg {
+				t.Logf("Event: %#v", event)
+				es.Stop()
+				wait <- event
+				return
+			}
+		}
+	}()
+
+	// write some new contents to test42 in the watchlist
+	err = ioutil.WriteFile(filenames[42], []byte("special"), 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// should be reported as expected
 	<-wait
+
+	/////
+	// create one more file that puts it over the edge
+	newFilename := filepath.Join(path, fmt.Sprint("test", 4096))
+	err = ioutil.WriteFile(newFilename, []byte("test"), 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filenames = append(filenames, newFilename)
+
+	// create an all-new instances to avoid problems
+	es = &EventStream{
+		Paths:   filenames,
+		Latency: 500 * time.Millisecond,
+		Device:  0, //dev,
+		Flags:   FileEvents,
+	}
+
+	err = es.Start()
+	if err == nil {
+		es.Stop()
+		t.Fatal("eventstream error was not detected on >4096 files in watchlist")
+	}
+}
+
+func TestRegistry(t *testing.T) {
+	if registry.m == nil {
+		t.Fatal("registry not initialized at start")
+	}
+
+	es := &EventStream{}
+	i := registry.Add(es)
+
+	if registry.Get(i) == nil {
+		t.Fatal("failed to retrieve es from registry")
+	}
+
+	if es != registry.Get(i) {
+		t.Errorf("eventstream did not match what was found in the registry")
+	}
+
+	registry.Delete(i)
+	if registry.Get(i) != nil {
+		t.Error("failed to delete registry")
+	}
 }
 
 func TestFSEventBasicRename(t *testing.T) {
@@ -186,25 +307,34 @@ func TestFSEventMultipleRenames(t *testing.T) {
 	}()
 
 	testFileNameCommon := "FSEvents.testfile"
-	renameAction := func(t *testing.T, count string) {
+	errs := make(chan error)
+	defer close(errs)
+	renameAction := func(count string) {
 		testFile := filepath.Join(path, testFileNameCommon+count)
 		f, err := os.OpenFile(testFile, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			t.Fatalf("creating test file failed: %s", err)
+			errs <- err
 		}
 		f.Close()
 		testFileRenamed := filepath.Join(path, testFileNameCommon+count+"Renamed")
 		if err := testRename(testFile, testFileRenamed); err != nil {
-			t.Fatalf("rename action failed (SYSCALL): %s", err)
+			errs <- err
 		}
 	}
 
 	numberOfFiles := 3
 	for i := 0; i < numberOfFiles; i++ {
-		go renameAction(t, strconv.Itoa(i))
+		go renameAction(strconv.Itoa(i))
 	}
 
 	time.Sleep(1000 * time.Millisecond)
+
+	select {
+	case err := <-errs:
+		t.Fatal(err)
+	default:
+	}
+
 	if renameReceived.value() != int32(numberOfFiles) {
 		t.Fatal("missing fsevents rename events")
 	}

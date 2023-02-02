@@ -16,7 +16,7 @@ SHELL		:= /bin/bash
 
 BIN	:= $(PWD)/bin
 GO	:= go
-GOTEST := $(BIN)/gotest
+GOTEST := go test
 LINT := $(BIN)/golangci-lint
 
 export PATH := $(PATH):$(BIN)
@@ -31,7 +31,6 @@ sense:
 	@echo "$$USAGE"
 
 install-dep-tools:
-	GOBIN=$(BIN) $(GO) get -u github.com/rakyll/gotest
 	@make install-golangci-lint
 
 install-golangci-lint:
