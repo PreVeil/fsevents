@@ -222,6 +222,9 @@ func (c *Cache) Start(es *EventStream) {
 
 	ticker := time.NewTicker(5 * time.Second)
 	c.done = make(chan struct{})
+	// Re-arm Stop for this new done channel, otherwise a cache restarted
+	// after a Stop (e.g. via EventStream.Restart) can never be stopped again.
+	c.once = sync.Once{}
 	go func() {
 		for {
 			select {
