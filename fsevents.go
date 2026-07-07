@@ -208,8 +208,11 @@ func (es *EventStream) Start() {
 	cbInfo := registry.Add(es)
 	es.registryID = cbInfo
 	es.uuid = GetDeviceUUID(es.Device)
-	es.start(es.Paths, cbInfo)
+	// The rename cache must be ready before es.start: the CFRunLoop can
+	// deliver events to fsevtCallback immediately, and Cache.Add panics on
+	// nil maps if the cache has not been started yet.
 	es.renameCache.Start(es)
+	es.start(es.Paths, cbInfo)
 }
 
 // Flush events that have occurred but haven't been delivered.
